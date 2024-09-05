@@ -1,20 +1,8 @@
 function resample_fmri(examdir,tdir,dopad)
-    % If no input exam directory is specified, prompt user to select from
-    % exams on IRCDICOM
-    if ~exist('scandir','var')
-        list = dir('I:\15-400*');
-        [sel,ok] = listdlg('PromptString','Select scan to convert',...
-            'SelectionMode','single',...
-            'ListString',{list.name});
-        if ~ok
-            return
-        else
-            examdir = fullfile(list(sel).folder,list(sel).name);
-        end
-    end
-    % Get the list of scans with "fMRI" in the name from the exam directory
-    scans = dir(fullfile(examdir,'*','*fMRI*'));
-    rsscans = dir(fullfile(examdir,'*','*Resting_State*'));
+
+    % Get the list of fMRI scans from the exam directory
+    scans = dir(fullfile(examdir,'*fMRI*'));
+    rsscans = dir(fullfile(examdir,'*Resting_State*'));
     scans = cat(1,scans,rsscans);
     scans(~vertcat(scans.isdir)) = [];
     if isempty(scans)
@@ -26,22 +14,20 @@ function resample_fmri(examdir,tdir,dopad)
 
     % If no input target directory is specified...
     if ~exist('tdir','var')
-        % set default location if EXODUS is mapped as X:\
-        tdir = fullfile('X:\EXODUS\IRC1080_resampled');
-        if isfolder(tdir)
-            tdir = fullfile(tdir,subdir,datedir);
-        else
-            % otherwise prompt user to select a location
-            tdir = uigetdir('','Select location to save resampled images');
-            if ~ischar(tdir)
-                return
-            end
+        % otherwise prompt user to select a location
+        tdir = uigetdir('','Select location to save resampled images');
+        if ~ischar(tdir)
+            return
         end
     end
+    tdir = fullfile(tdir,subdir,datedir);
 
     % If padding type not specified, set to true
     if ~exist('dopad','var')
         dopad = true;
+    elseif ~islogical(dopad)
+        fprintf(2,'input #3 must be logical (true or false)\n')
+        return
     end
 
 
@@ -65,6 +51,7 @@ function resample_fmri(examdir,tdir,dopad)
             return
         end
         
+        WaitObj = parfor_wait(length(dcms),'Waitbar',true,'Message',sprintf('resampling %i/%i: %s',s,length(scans),strrep(scans(s).name,'_','\_')));
         
         parfor n=1:length(dcms)
             % read in the DICOM tags
@@ -101,6 +88,10 @@ function resample_fmri(examdir,tdir,dopad)
             
             % write the file
             dicomwrite(rI,fullfile(ddir,dcms(n).name),rinfo,'CreateMode','copy','WritePrivate',true);
+
+            WaitObj.Send;
         end
+
+        WaitObj.Destroy;
     end
 end
